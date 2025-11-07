@@ -2,11 +2,20 @@
 
 import asyncio
 import os
+import sys
 from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
+
+
+# Ensure local vanna package (vanna_repo/src) is importable when running via Streamlit
+PROJECT_ROOT = Path(__file__).resolve().parent
+VANNA_SRC = PROJECT_ROOT / "vanna_repo" / "src"
+if VANNA_SRC.exists() and str(VANNA_SRC) not in sys.path:
+    sys.path.insert(0, str(VANNA_SRC))
 
 from vanna.core.user import RequestContext
 from vanna.components.rich.data.dataframe import DataFrameComponent
