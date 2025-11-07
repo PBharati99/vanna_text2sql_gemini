@@ -120,12 +120,15 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                     csv_content = df.to_csv(index=False)
                     await self.file_system.write_file(filename, csv_content, context, overwrite=True)
 
-                    # Create result text for LLM with truncated results
-                    results_preview = csv_content
-                    if len(results_preview) > 1000:
-                        results_preview = results_preview[:1000] + "\n(Results truncated to 1000 characters. FOR LARGE RESULTS YOU DO NOT NEED TO SUMMARIZE THESE RESULTS OR PROVIDE OBSERVATIONS. THE NEXT STEP SHOULD BE A VISUALIZE_DATA CALL)"
-
-                    result = f"{results_preview}\n\nResults saved to file: {filename}\n\n**IMPORTANT: FOR VISUALIZE_DATA USE FILENAME: {filename}**"
+                    # Build preview text (top 10 rows)
+                    preview_df = df.head(min(10, row_count))
+                    preview_text = preview_df.to_string(index=False)
+                    result = (
+                        f"Top {len(preview_df)} rows shown below (total rows: {row_count}):\n"
+                        f"{preview_text}\n\n"
+                        f"Full results saved to file: {filename}\n\n"
+                        f"**IMPORTANT: FOR VISUALIZE_DATA USE FILENAME: {filename}**"
+                    )
 
                     # Create DataFrame component for UI
                     dataframe_component = DataFrameComponent.from_records(
@@ -144,7 +147,8 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                         "columns": columns,
                         "query_type": query_type,
                         "results": results_data,
-                        "output_file": filename
+                        "output_file": filename,
+                        "preview_rows": preview_df.to_dict('records'),
                     }
             else:
                 # For non-SELECT queries (INSERT, UPDATE, DELETE, etc.)
