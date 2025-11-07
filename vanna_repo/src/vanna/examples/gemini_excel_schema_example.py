@@ -28,6 +28,8 @@ import os
 import sys
 from typing import TYPE_CHECKING, List, Optional
 
+import pandas as pd
+
 if TYPE_CHECKING:
     from vanna import Agent
     from vanna.core.user.models import User
@@ -43,6 +45,7 @@ logging.getLogger("vanna.tools.run_sql").setLevel(logging.DEBUG)  # Enable SQL q
 try:
     from vanna import Agent
     from vanna.core.agent.config import AgentConfig
+    from vanna.capabilities.sql_runner import SqlRunner, RunSqlToolArgs
     from vanna.core.registry import ToolRegistry
     from vanna.core.system_prompt import SystemPromptBuilder
     from vanna.core.tool.models import ToolSchema
@@ -78,16 +81,16 @@ class ExcelSchemaSystemPromptBuilder(SystemPromptBuilder):
         # Check if run_sql tool is available
         tool_names = [tool.name for tool in tools]
         has_sql_tool = "run_sql" in tool_names
-        
+
         # Build base prompt with SQL-aware instructions
         base_prompt = self.prompt_builder.build_system_prompt(
             allow_sql_execution=has_sql_tool
         )
-        
+
         # Add additional instructions if SQL tool is available
         if has_sql_tool:
             sql_instructions = """
-            
+
 ================================================================================
 SQL EXECUTION (AVAILABLE):
 ================================================================================
@@ -120,8 +123,18 @@ IMPORTANT:
 - DO NOT just document the schema - you must execute SQL to answer the question!
 """
             return base_prompt + sql_instructions
-        
+
         return base_prompt
+
+
+class LoggingSqlRunner(SqlRunner):
+    """SqlRunner that logs SQL instead of executing it."""
+
+    async def run_sql(self, args: RunSqlToolArgs, context) -> pd.DataFrame:  # type: ignore[override]
+        print("\n================ LLM GENERATED SQL ================")
+        print(args.sql)
+        print("================ END LLM SQL =====================\n")
+        return pd.DataFrame()
 
 
 def create_excel_schema_agent(
@@ -180,7 +193,7 @@ def create_excel_schema_agent(
     registry.register(RelationshipsTool(provider))
     registry.register(ResolveTermTool(provider))
 
-    # Register run_sql tool if Snowflake config provided
+    # Register run_sql tool
     if snowflake_config:
         try:
             # Create Snowflake runner
@@ -203,7 +216,13 @@ def create_excel_schema_agent(
             print("[ERROR] SQL execution will NOT be available. To fix this:")
             print("  1. Install Snowflake connector: pip install snowflake-connector-python")
             print("  2. Or install with extras: pip install 'vanna[snowflake]'")
-            print("[info] Continuing without SQL execution capability - Gemini will only do schema discovery")
+            print("[info] Falling back to logging-only SQL runner.")
+            logging_runner = LoggingSqlRunner()
+            registry.register(RunSqlTool(sql_runner=logging_runner))
+    else:
+        logging_runner = LoggingSqlRunner()
+        registry.register(RunSqlTool(sql_runner=logging_runner))
+        print("[info] Snowflake disabled; logging SQL queries instead of executing them.")
 
     # Create system prompt builder (will detect SQL tool from available tools)
     system_prompt_builder = ExcelSchemaSystemPromptBuilder(prompt_builder)
@@ -241,13 +260,14 @@ async def main():
         print(f"[error] Excel file not found: {excel_path}")
         sys.exit(1)
 
-    # Snowflake configuration
+    # Snowflake configuration (set to None to disable execution and log SQL instead)
+    # snowflake_config = None
     snowflake_config = {
         'account': 'cvs-cvsretailprod',
         'user': 'bharati.peddinti@CVSHealth.com',
         'role': 'GRP-CN-SCAI-ANALYTICS',
         'warehouse': 'WH_SCAI_ANALYTICS_L_QUERY_01',
-        'authenticator': 'externalbrowser',  # Using external browser auth
+        'authenticator': 'externalbrowser',
     }
 
     # Create agent
@@ -263,7 +283,11 @@ async def main():
 
     # Example queries
     queries = [
-        "How did promotions vary across different stores?",
+        # "How did promotions vary across different stores?",
+        # "Which promotion types are most common for store 123?",
+        # "List the top 5 stores by number of promotions in Q1 2025",
+        "What is the average sale price during promotions for SKU 98765?",
+        # "Show promotional activity for stores in the Northeast region",
     ]
 
     conversation_id = "excel-schema-test"

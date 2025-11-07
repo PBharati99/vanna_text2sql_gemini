@@ -56,6 +56,9 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
             logger.info(f"[run_sql] Executing SQL query (original length: {len(args.sql)} chars, cleaned length: {len(cleaned_sql)} chars)")
             logger.debug(f"[run_sql] Original SQL:\n{args.sql}")
             logger.debug(f"[run_sql] Cleaned SQL:\n{cleaned_sql}")
+            logger.debug(f"[run_sql] Cleaned SQL (repr): {cleaned_sql!r}")
+            codepoints = ' '.join(f"{ord(ch)}" for ch in cleaned_sql[:50])
+            logger.debug(f"[run_sql] Cleaned SQL first 50 chars codepoints: {codepoints}")
             
             # Validate SQL is read-only (SELECT only) - validation also cleans the SQL
             is_valid, error_msg = validate_sql_readonly(cleaned_sql)
