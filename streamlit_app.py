@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import importlib
 import pandas as pd
 import streamlit as st
 
@@ -17,9 +18,20 @@ VANNA_SRC = PROJECT_ROOT / "vanna_repo" / "src"
 if VANNA_SRC.exists() and str(VANNA_SRC) not in sys.path:
     sys.path.insert(0, str(VANNA_SRC))
 
+importlib.invalidate_caches()
+
 from vanna.core.user import RequestContext
 from vanna.components.rich.data.dataframe import DataFrameComponent
-from vanna.examples.gemini_excel_schema_example import create_excel_schema_agent
+from vanna.examples.gemini_excel_schema_example import (
+    create_excel_schema_agent,
+    collect_agent_response,
+)
+
+
+# Force reloading of local Snowflake runner to pick up latest patches during Streamlit hot-reload
+snowflake_runner_module = importlib.import_module("vanna.integrations.snowflake.sql_runner")
+snowflake_runner_module = importlib.reload(snowflake_runner_module)
+SNOWFLAKE_RUNNER_PATH = getattr(snowflake_runner_module, "__file__", "(unknown)")
 
 
 def _build_snowflake_config() -> Optional[Dict[str, str]]:
@@ -73,28 +85,14 @@ async def _ask_agent(prompt: str) -> Dict[str, List]:
         remote_addr="127.0.0.1",
     )
 
-    texts: List[str] = []
-    tables: List[pd.DataFrame] = []
-
-    async for component in agent.send_message(
+    response = await collect_agent_response(
+        agent=agent,
         request_context=request_context,
         message=prompt,
         conversation_id=None,
-    ):
-        # Plain text content
-        if component.simple_component and component.simple_component.text:
-            texts.append(component.simple_component.text)
+    )
 
-        # Rich DataFrame components
-        rich = getattr(component, "rich_component", None)
-        if isinstance(rich, DataFrameComponent) and rich.rows:
-            tables.append(pd.DataFrame(rich.rows))
-
-        # Fallback generic content
-        if getattr(component, "content", None):
-            texts.append(component.content)
-
-    return {"texts": texts, "tables": tables}
+    return {"texts": response.texts, "tables": response.tables}
 
 
 st.set_page_config(page_title="Promo Analytics Assistant", page_icon="🛍️", layout="wide")
@@ -104,6 +102,9 @@ st.markdown(
     "Ask questions about promotions, pricing, and store performance."
     "\nConfigure credentials with environment variables like `SNOWFLAKE_ACCOUNT` if you want live SQL execution."
 )
+
+with st.sidebar:
+    st.caption(f"Using Snowflake runner module: `{SNOWFLAKE_RUNNER_PATH}`")
 
 if "history" not in st.session_state:
     st.session_state.history = []  # List[Dict[str, str]]

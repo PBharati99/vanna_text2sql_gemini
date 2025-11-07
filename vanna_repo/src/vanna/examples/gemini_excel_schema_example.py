@@ -26,6 +26,7 @@ import asyncio
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 
 import pandas as pd
@@ -63,6 +64,7 @@ try:
         TableInfoTool,
     )
     from vanna.tools.run_sql import RunSqlTool
+    from vanna.components.rich.data.dataframe import DataFrameComponent
 except ImportError as e:
     print(f"[error] Import failed: {e}")
     print("Ensure PYTHONPATH includes 'src' and dependencies are installed.")
@@ -135,6 +137,54 @@ class LoggingSqlRunner(SqlRunner):
         print(args.sql)
         print("================ END LLM SQL =====================\n")
         return pd.DataFrame()
+
+
+@dataclass
+class AgentResponse:
+    """Structured response collected from an agent send_message call."""
+
+    texts: List[str]
+    tables: List[pd.DataFrame]
+    raw_components: List
+
+
+async def collect_agent_response(
+    agent: "Agent",
+    request_context: "RequestContext",
+    message: str,
+    conversation_id: Optional[str] = None,
+) -> AgentResponse:
+    """Collect all components returned by the agent for a given message.
+
+    This helper is shared between the CLI example and the Streamlit UI to ensure
+    consistent handling of Gemini responses.
+    """
+
+    texts: List[str] = []
+    tables: List[pd.DataFrame] = []
+    components: List = []
+
+    async for component in agent.send_message(
+        request_context=request_context,
+        message=message,
+        conversation_id=conversation_id,
+    ):
+        components.append(component)
+
+        # Simple text content
+        if getattr(component, "simple_component", None) and component.simple_component.text:
+            texts.append(component.simple_component.text)
+
+        # Rich dataframe components
+        rich_component = getattr(component, "rich_component", None)
+        if isinstance(rich_component, DataFrameComponent) and rich_component.rows:
+            tables.append(pd.DataFrame(rich_component.rows))
+
+        # Fallback to raw content
+        elif getattr(component, "content", None):
+            texts.append(component.content)
+
+    return AgentResponse(texts=texts, tables=tables, raw_components=components)
 
 
 def create_excel_schema_agent(
@@ -301,20 +351,17 @@ async def main():
 
         try:
             print("\nResponse:")
-            async for component in agent.send_message(
+            agent_response = await collect_agent_response(
+                agent=agent,
                 request_context=request_context,
                 message=query,
                 conversation_id=current_conversation_id,
-            ):
-                # Print component content
-                if hasattr(component, "simple_component") and component.simple_component:
-                    if hasattr(component.simple_component, "text"):
-                        print(component.simple_component.text)
-                elif hasattr(component, "rich_component") and component.rich_component:
-                    if hasattr(component.rich_component, "content") and component.rich_component.content:
-                        print(component.rich_component.content)
-                elif hasattr(component, "content") and component.content:
-                    print(component.content)
+            )
+
+            for text in agent_response.texts:
+                print(text)
+            for table in agent_response.tables:
+                print(table.head())
 
         except Exception as e:
             print(f"\n[error] Query failed: {e}")
