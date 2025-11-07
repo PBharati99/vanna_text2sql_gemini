@@ -126,6 +126,14 @@ class SnowflakeRunner(SqlRunner):
         # Add any additional kwargs
         conn_params.update(self.kwargs)
 
+        # Helper to quote identifiers with special characters or lowercase
+        def _quote(identifier: Optional[str]) -> Optional[str]:
+            if not identifier:
+                return identifier
+            if identifier.startswith("\"") and identifier.endswith("\""):
+                return identifier
+            return f'"{identifier}"'
+
         # Connect to the database
         conn = self.snowflake.connect(**conn_params)
 
@@ -134,15 +142,15 @@ class SnowflakeRunner(SqlRunner):
         try:
             # Set role if specified
             if self.role:
-                cursor.execute(f"USE ROLE {self.role}")
+                cursor.execute(f"USE ROLE {_quote(self.role)}")
 
             # Set warehouse if specified
             if self.warehouse:
-                cursor.execute(f"USE WAREHOUSE {self.warehouse}")
+                cursor.execute(f"USE WAREHOUSE {_quote(self.warehouse)}")
 
             # Use the specified database if provided
             if self.database:
-                cursor.execute(f"USE DATABASE {self.database}")
+                cursor.execute(f"USE DATABASE {_quote(self.database)}")
 
             # Execute the query
             cursor.execute(args.sql)
