@@ -1,12 +1,15 @@
 """Generic SQL query execution tool with dependency injection."""
 from typing import Optional, Type
 import uuid
+import logging
 from vanna.core.tool import Tool, ToolContext, ToolResult
 from vanna.components import UiComponent, DataFrameComponent, NotificationComponent, ComponentType, SimpleTextComponent
 from vanna.capabilities.sql_runner import SqlRunner, RunSqlToolArgs
 from vanna.capabilities.file_system import FileSystem
 from vanna.integrations.local import LocalFileSystem
-from vanna.schema.sql_validator import validate_sql_readonly
+from vanna.schema.sql_validator import validate_sql_readonly, clean_sql_query
+
+logger = logging.getLogger(__name__)
 
 
 class RunSqlTool(Tool[RunSqlToolArgs]):
@@ -46,8 +49,16 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
     async def execute(self, context: ToolContext, args: RunSqlToolArgs) -> ToolResult:
         """Execute a SQL query using the injected SqlRunner."""
         try:
-            # Validate SQL is read-only (SELECT only)
-            is_valid, error_msg = validate_sql_readonly(args.sql)
+            # Clean the SQL query (remove markdown, comments, etc.)
+            cleaned_sql = clean_sql_query(args.sql)
+            
+            # Log the SQL being executed for debugging
+            logger.info(f"[run_sql] Executing SQL query (original length: {len(args.sql)} chars, cleaned length: {len(cleaned_sql)} chars)")
+            logger.debug(f"[run_sql] Original SQL:\n{args.sql}")
+            logger.debug(f"[run_sql] Cleaned SQL:\n{cleaned_sql}")
+            
+            # Validate SQL is read-only (SELECT only) - validation also cleans the SQL
+            is_valid, error_msg = validate_sql_readonly(cleaned_sql)
             if not is_valid:
                 error_message = f"SQL validation failed: {error_msg}"
                 return ToolResult(
@@ -65,11 +76,15 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                     metadata={"error_type": "sql_validation_error", "query_blocked": True}
                 )
             
-            # Use the injected SqlRunner to execute the query
-            df = await self.sql_runner.run_sql(args, context)
+            # Create a new args object with cleaned SQL
+            from vanna.capabilities.sql_runner import RunSqlToolArgs as RunSqlToolArgsType
+            cleaned_args = RunSqlToolArgsType(sql=cleaned_sql)
+            
+            # Use the injected SqlRunner to execute the cleaned query
+            df = await self.sql_runner.run_sql(cleaned_args, context)
 
-            # Determine query type
-            query_type = args.sql.strip().upper().split()[0]
+            # Determine query type (use cleaned SQL)
+            query_type = cleaned_sql.strip().upper().split()[0] if cleaned_sql.strip() else "SELECT"
 
             if query_type == "SELECT":
                 # Handle SELECT queries with results
@@ -156,6 +171,8 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
 
         except Exception as e:
             error_message = f"Error executing query: {str(e)}"
+            logger.error(f"[run_sql] SQL execution failed: {error_message}")
+            logger.error(f"[run_sql] Failed SQL query:\n{args.sql}")
             return ToolResult(
                 success=False,
                 result_for_llm=error_message,

@@ -38,6 +38,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logging.getLogger("vanna.integrations.gemini").setLevel(logging.DEBUG)
+logging.getLogger("vanna.tools.run_sql").setLevel(logging.DEBUG)  # Enable SQL query logging
 
 try:
     from vanna import Agent
@@ -94,6 +95,22 @@ After discovering the schema, you MUST:
 1. Generate a SQL SELECT query to answer the user's question
 2. Call the run_sql tool with the generated SQL query
 3. Present the results to the user
+
+CRITICAL SQL FORMATTING RULES:
+- The SQL string passed to run_sql must be PURE SQL ONLY - no markdown, no comments, no explanations
+- Do NOT wrap SQL in ```sql ... ``` code blocks
+- Do NOT include SQL comments (-- or /* */) in the query
+- Do NOT include explanatory text before or after the SQL
+- The sql parameter should contain ONLY the executable SQL query
+
+Example CORRECT format:
+  run_sql(sql="SELECT STORE_NBR, COUNT(*) FROM APP_PROMOFCST.PROMO_FORECAST.NML_AD_STR_SKU_HIST GROUP BY STORE_NBR")
+
+Example WRONG format (DO NOT DO THIS):
+  run_sql(sql="```sql
+  -- This query counts promotions by store
+  SELECT STORE_NBR, COUNT(*) FROM ...
+  ```")
 
 IMPORTANT:
 - Generate complete, executable SELECT queries

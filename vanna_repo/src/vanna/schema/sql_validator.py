@@ -32,6 +32,42 @@ FORBIDDEN_KEYWORDS = [
 ]
 
 
+def clean_sql_query(sql: str) -> str:
+    """Clean SQL query by removing markdown code blocks, comments, and extra whitespace.
+    
+    This function ensures the SQL is pure and executable by:
+    - Removing markdown code blocks (```sql ... ```)
+    - Removing SQL comments (-- and /* */)
+    - Normalizing whitespace
+    
+    Args:
+        sql: Raw SQL query string (may contain markdown or comments)
+        
+    Returns:
+        Cleaned SQL query string ready for execution
+    """
+    if not sql:
+        return ""
+    
+    # Remove markdown code blocks
+    sql = sql.strip()
+    if sql.startswith("```"):
+        # Find the closing ```
+        end_idx = sql.find("```", 3)
+        if end_idx != -1:
+            sql = sql[3:end_idx].strip()
+            # Remove language tag if present (e.g., "sql" after opening ```)
+            if sql.startswith("sql"):
+                sql = sql[3:].strip()
+            elif sql.startswith("SQL"):
+                sql = sql[3:].strip()
+    
+    # Normalize: remove comments and extra whitespace
+    sql = _normalize_sql(sql)
+    
+    return sql.strip()
+
+
 def validate_sql_readonly(sql: str) -> Tuple[bool, Optional[str]]:
     """Validate that SQL query is read-only (SELECT only).
     
@@ -46,7 +82,13 @@ def validate_sql_readonly(sql: str) -> Tuple[bool, Optional[str]]:
     if not sql or not sql.strip():
         return False, "Empty SQL query"
     
-    # Normalize: remove comments and extra whitespace
+    # Clean the SQL first (remove markdown, comments)
+    sql = clean_sql_query(sql)
+    
+    if not sql or not sql.strip():
+        return False, "SQL query is empty after cleaning"
+    
+    # Normalize: remove comments and extra whitespace (already done by clean_sql_query, but keep for safety)
     sql_normalized = _normalize_sql(sql)
     
     # Extract first significant keyword (skip WITH, comments, etc.)
