@@ -101,10 +101,11 @@ def _get_agent():
 
 
 def _translate_week_nbr(df: pd.DataFrame) -> pd.DataFrame:
-    """Translate week_nbr column to human-readable format.
+    """Translate week_nbr column to human-readable format with date range.
     
     Adds a new column 'week_description' after week_nbr column if it exists.
-    Format: YYYYWW -> "Week WW of YYYY"
+    Format: YYYYWW -> "Week WW of YYYY (Month DD-DD)"
+    Example: 202521 -> "Week 21 of 2025 (May 19-25)"
     
     Args:
         df: DataFrame potentially containing week_nbr column
@@ -112,6 +113,8 @@ def _translate_week_nbr(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with week_description column added if week_nbr exists
     """
+    from datetime import datetime, timedelta
+    
     if df is None or df.empty:
         return df
     
@@ -128,18 +131,40 @@ def _translate_week_nbr(df: pd.DataFrame) -> pd.DataFrame:
     # Create a copy to avoid modifying original
     df = df.copy()
     
-    # Translate week_nbr to readable format
+    # Translate week_nbr to readable format with date range
     def format_week(week_nbr):
         try:
             if pd.isna(week_nbr):
                 return ""
+            
             week_str = str(int(week_nbr))
-            if len(week_str) == 6:
-                year = week_str[:4]
-                week = week_str[4:6]
-                return f"Week {week} of {year}"
-            return str(week_nbr)
-        except:
+            if len(week_str) != 6:
+                return str(week_nbr)
+            
+            year = int(week_str[:4])
+            week = int(week_str[4:6])
+            
+            # Calculate the Monday of the ISO week
+            # ISO week 1 is the first week with a Thursday in the new year
+            jan_4 = datetime(year, 1, 4)  # Jan 4 is always in week 1
+            week_1_monday = jan_4 - timedelta(days=jan_4.weekday())
+            
+            # Calculate the Monday of the target week
+            target_monday = week_1_monday + timedelta(weeks=week - 1)
+            target_sunday = target_monday + timedelta(days=6)
+            
+            # Format the date range
+            if target_monday.month == target_sunday.month:
+                # Same month: "Week 21 of 2025 (May 19-25)"
+                date_range = f"{target_monday.strftime('%B')} {target_monday.day}-{target_sunday.day}"
+            else:
+                # Different months: "Week 01 of 2025 (Dec 30 - Jan 5)"
+                date_range = f"{target_monday.strftime('%b %d')} - {target_sunday.strftime('%b %d')}"
+            
+            return f"Week {week:02d} of {year} ({date_range})"
+            
+        except Exception as e:
+            # If any error occurs, return the original value
             return str(week_nbr)
     
     # Insert the translated column right after week_nbr
