@@ -75,16 +75,78 @@ def _build_snowflake_config() -> Optional[Dict[str, str]]:
     return config
 
 
-@lru_cache(maxsize=1)
 def _get_agent():
-    excel_path = os.getenv("EXCEL_PATH", "Promo Semantic Data_20250519.xlsx")
-    snowflake_config = _build_snowflake_config()
+    """Get or create the Vanna agent with persistent connection.
+    
+    Uses st.session_state to ensure single instance across Streamlit reruns,
+    preventing repeated Snowflake browser authentication.
+    """
+    # Check if agent already exists in session state
+    if "vanna_agent" not in st.session_state or "snowflake_enabled" not in st.session_state:
+        print("[INFO] Initializing Vanna agent and Snowflake connection...")
+        excel_path = os.getenv("EXCEL_PATH", "Promo Semantic Data_20250519.xlsx")
+        snowflake_config = _build_snowflake_config()
 
-    agent = create_excel_schema_agent(
-        excel_path=excel_path,
-        snowflake_config=snowflake_config,
-    )
-    return agent, snowflake_config is not None
+        agent = create_excel_schema_agent(
+            excel_path=excel_path,
+            snowflake_config=snowflake_config,
+        )
+        
+        # Store in session state to persist across reruns
+        st.session_state.vanna_agent = agent
+        st.session_state.snowflake_enabled = snowflake_config is not None
+        print("[INFO] Agent initialized and stored in session state")
+    
+    return st.session_state.vanna_agent, st.session_state.snowflake_enabled
+
+
+def _translate_week_nbr(df: pd.DataFrame) -> pd.DataFrame:
+    """Translate week_nbr column to human-readable format.
+    
+    Adds a new column 'week_description' after week_nbr column if it exists.
+    Format: YYYYWW -> "Week WW of YYYY"
+    
+    Args:
+        df: DataFrame potentially containing week_nbr column
+        
+    Returns:
+        DataFrame with week_description column added if week_nbr exists
+    """
+    if df is None or df.empty:
+        return df
+    
+    # Check for week_nbr column (case-insensitive)
+    week_col = None
+    for col in df.columns:
+        if col.lower() == 'week_nbr':
+            week_col = col
+            break
+    
+    if week_col is None:
+        return df
+    
+    # Create a copy to avoid modifying original
+    df = df.copy()
+    
+    # Translate week_nbr to readable format
+    def format_week(week_nbr):
+        try:
+            if pd.isna(week_nbr):
+                return ""
+            week_str = str(int(week_nbr))
+            if len(week_str) == 6:
+                year = week_str[:4]
+                week = week_str[4:6]
+                return f"Week {week} of {year}"
+            return str(week_nbr)
+        except:
+            return str(week_nbr)
+    
+    # Insert the translated column right after week_nbr
+    week_col_idx = df.columns.get_loc(week_col)
+    df.insert(week_col_idx + 1, 'week_description', df[week_col].apply(format_week))
+    
+    return df
 
 
 def _clean_response_text(text: str) -> str:
@@ -152,7 +214,13 @@ async def _ask_agent(prompt: str) -> Dict[str, List]:
     elif not cleaned_texts:
         cleaned_texts = ["I couldn't find any data for your query. Please try rephrasing your question."]
 
-    return {"texts": cleaned_texts, "tables": response.tables, "snowflake_enabled": snowflake_enabled}
+    # Translate week_nbr columns in all tables (post-processing)
+    translated_tables = []
+    for table in response.tables:
+        translated_table = _translate_week_nbr(table)
+        translated_tables.append(translated_table)
+
+    return {"texts": cleaned_texts, "tables": translated_tables, "snowflake_enabled": snowflake_enabled}
 
 
 # Custom CSS for chat interface
