@@ -29,10 +29,9 @@ from vanna.examples.gemini_excel_schema_example import (
 )
 
 
-# Force reloading of local Snowflake runner to pick up latest patches during Streamlit hot-reload
-snowflake_runner_module = importlib.import_module("vanna.integrations.snowflake.sql_runner")
-snowflake_runner_module = importlib.reload(snowflake_runner_module)
-SNOWFLAKE_RUNNER_PATH = getattr(snowflake_runner_module, "__file__", "(unknown)")
+# Note: Module reload removed to preserve persistent Snowflake connection
+# The @lru_cache decorator on _get_agent() ensures a single SnowflakeRunner instance
+# is created and reused throughout the Streamlit session, avoiding repeated browser auth
 
 
 def _build_snowflake_config() -> Optional[Dict[str, str]]:
