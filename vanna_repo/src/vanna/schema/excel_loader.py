@@ -80,7 +80,11 @@ class ExcelSchemaLoader:
         schema = DatabaseSchemaModel()
 
         # Locate sheets by heuristic
-        table_sheet = self._pick_sheet(["table", "tab", "schema"], min_columns=2)
+        # Prioritize finding a sheet that actually has a "Table" column for tables
+        table_sheet = self._pick_sheet(["table glossary", "tables"], min_columns=2, required_keywords=["table"])
+        if not table_sheet:
+             table_sheet = self._pick_sheet(["table", "tab", "schema"], min_columns=2)
+             
         column_sheet = self._pick_sheet(["column"], min_columns=2)
         rel_sheet = self._pick_sheet(["relationship", "join"], min_columns=2)
         term_sheet = self._pick_sheet(["glossary", "term", "dictionary"], min_columns=1, exclude=[table_sheet, column_sheet, rel_sheet])
@@ -96,12 +100,19 @@ class ExcelSchemaLoader:
 
         return schema
 
-    def _pick_sheet(self, keywords: List[str], min_columns: int = 1, exclude: List[Optional[str]] | None = None) -> Optional[str]:
+    def _pick_sheet(self, keywords: List[str], min_columns: int = 1, exclude: List[Optional[str]] | None = None, required_keywords: List[str] | None = None) -> Optional[str]:
         exclude = exclude or []
         for name, df in self._sheets.items():
             if name in exclude:
                 continue
             key = name.lower()
+            
+            # check required column keywords if provided
+            if required_keywords:
+                cols = [c.lower() for c in df.columns]
+                if not any(any(rk in c for c in cols) for rk in required_keywords):
+                    continue
+
             if any(k in key for k in keywords) and df.shape[1] >= min_columns:
                 return name
         return None
@@ -112,6 +123,7 @@ class ExcelSchemaLoader:
         db_col = self._first_match(cols, ["database", "db"])
         schema_col = self._first_match(cols, ["schema", "schema_name"])
         table_col = self._first_match(cols, ["table", "table_name", "tab_name"])
+        role_col = self._first_match(cols, ["role", "table_role", "type"])  # optional
         desc_col = self._first_match(cols, ["description", "table_description", "desc"])  # optional
         business_name_col = self._first_match(cols, ["business_name", "display_name", "alias"])  # optional
 
@@ -128,6 +140,7 @@ class ExcelSchemaLoader:
                 database=database or None,
                 schema=schema_name or None,
                 table=table_name,
+                role=_norm(row.get(role_col)) if role_col else None,
                 description=None,
                 business_terms=[],
                 primary_keys=[],
@@ -163,6 +176,7 @@ class ExcelSchemaLoader:
         table_col = self._first_match(cols, ["table", "table_name", "tab_name"])
         column_col = self._first_match(cols, ["column", "column_name", "col_name"])
         dtype_col = self._first_match(cols, ["data_type", "datatype", "type"])  # optional
+        sem_type_col = self._first_match(cols, ["semantic_type", "semantic"])  # optional
         desc_col = self._first_match(cols, ["description", "column_description", "desc"])  # optional
         business_name_col = self._first_match(cols, ["business_name", "display_name", "alias"])  # optional
         pk_flag_col = self._first_match(cols, ["is_pk", "primary_key", "is_primary_key"])  # optional
@@ -194,6 +208,7 @@ class ExcelSchemaLoader:
 
             # Build incoming values
             in_dtype = _norm(row.get(dtype_col)) if dtype_col else None
+            in_sem_type = _norm(row.get(sem_type_col)) if sem_type_col else None
             in_desc = _norm(row.get(desc_col)) if desc_col else None
             in_bn = _norm(row.get(business_name_col)) if business_name_col else None
             in_is_pk = bool(row.get(pk_flag_col)) if pk_flag_col else None
@@ -207,6 +222,8 @@ class ExcelSchemaLoader:
                 # Prefer first non-empty dtype; if different later, keep original (no override)
                 if not existing.data_type and in_dtype:
                     existing.data_type = in_dtype
+                if not existing.semantic_type and in_sem_type:
+                    existing.semantic_type = in_sem_type
                 # Merge business terms
                 if in_bn and in_bn not in existing.business_terms:
                     existing.business_terms.append(in_bn)
@@ -247,6 +264,7 @@ class ExcelSchemaLoader:
                     table_fqn=table_fqn,
                     column_name=column_name,
                     data_type=in_dtype,
+                    semantic_type=in_sem_type,
                     description=in_desc,
                     business_terms=[in_bn] if in_bn else [],
                     is_primary_key=in_is_pk,
@@ -268,6 +286,7 @@ class ExcelSchemaLoader:
                     (table_col or ""),
                     (column_col or ""),
                     (dtype_col or ""),
+                    (sem_type_col or ""),
                     (desc_col or ""),
                     (business_name_col or ""),
                     (pk_flag_col or ""),

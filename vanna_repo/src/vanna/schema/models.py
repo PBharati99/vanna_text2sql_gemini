@@ -25,6 +25,7 @@ class ColumnDefinition(BaseModel):
     is_foreign_key: Optional[bool] = Field(default=None)
     referenced_table_fqn: Optional[str] = Field(default=None, description="If FK, referenced table FQN")
     referenced_column_name: Optional[str] = Field(default=None, description="If FK, referenced column name")
+    semantic_type: Optional[str] = Field(default=None, description="Semantic type: Metric, Identifier, Time, Attribute")
     metadata: Dict[str, str] = Field(default_factory=dict, description="Arbitrary extra attributes from glossary")
 
 
@@ -33,6 +34,7 @@ class TableDefinition(BaseModel):
     database: Optional[str] = Field(default=None)
     schema: Optional[str] = Field(default=None)
     table: str = Field(description="Physical table name")
+    role: Optional[str] = Field(default=None, description="Table role: FACT or DIM")
     description: Optional[str] = Field(default=None)
     business_terms: List[str] = Field(default_factory=list, description="Aliases/business terms for this table")
     primary_keys: List[str] = Field(default_factory=list)
