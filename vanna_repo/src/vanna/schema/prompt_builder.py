@@ -60,13 +60,16 @@ class ExcelSchemaPromptBuilder:
         lines.append("5. Use column_info to get detailed information about specific columns (data types, descriptions, relationships).")
         lines.append("6. Use relationships tool to find join paths between relevant tables.")
         lines.append("7. Use resolve_term if the user mentions business terms or synonyms.")
+        if allow_sql_execution:
+             lines.append("8. Use get_sample_data(table, column) to inspect actual values (useful for filtering by 'Active'/'Inactive' codes).")
         
         if allow_sql_execution:
             lines.append("")
             lines.append("SQL GENERATION AND EXECUTION (MANDATORY AFTER SCHEMA DISCOVERY):")
-            lines.append("8. After discovering the schema, IMMEDIATELY generate a SQL SELECT query to answer the user's question.")
-            lines.append("9. Use the run_sql tool to execute the generated SQL query.")
-            lines.append("10. Present the query results to the user with a clear explanation.")
+            lines.append("9. After discovering the schema, IMMEDIATELY generate a SQL SELECT query to answer the user's question.")
+            lines.append("10. Use the validate_sql tool to check if your query uses correct table/column names.")
+            lines.append("11. Use the run_sql tool to execute the generated SQL query.")
+            lines.append("12. Present the query results to the user with a clear explanation.")
             lines.append("")
             lines.append("DATE/WEEK COLUMN INFORMATION:")
             lines.append("- week_nbr column format: YYYYWW (e.g., 202521 = Year 2025, Week 21)")
@@ -78,6 +81,7 @@ class ExcelSchemaPromptBuilder:
             lines.append("- Use fully-qualified table names: DATABASE.SCHEMA.TABLE (e.g., APP_PROMOFCST.PROMO_FORECAST.NML_AD_STR_SKU_HIST)")
             lines.append("- Column names should be used as-is from the schema (case-sensitive)")
             lines.append("- Use proper JOIN syntax: INNER JOIN, LEFT JOIN, etc. with ON clauses")
+            lines.append("- ALWAYS exclude NULL values in aggregations or important filters unless explicitly asked (WHERE col IS NOT NULL)")
             lines.append("- Do NOT include SQL comments (-- or /* */) in the query string")
             lines.append("- Do NOT wrap SQL in markdown code blocks (```sql ... ```)")
             lines.append("- The SQL string passed to run_sql must be pure, executable SQL only")

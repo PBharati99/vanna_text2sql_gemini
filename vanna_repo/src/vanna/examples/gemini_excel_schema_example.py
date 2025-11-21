@@ -64,6 +64,8 @@ try:
         TableInfoTool,
     )
     from vanna.tools.run_sql import RunSqlTool
+    from vanna.tools.sql_validator import ValidateSqlTool
+    from vanna.tools.sample_data import SampleDataTool
     from vanna.components.rich.data.dataframe import DataFrameComponent
 except ImportError as e:
     print(f"[error] Import failed: {e}")
@@ -242,6 +244,7 @@ def create_excel_schema_agent(
     registry.register(ColumnInfoTool(provider))
     registry.register(RelationshipsTool(provider))
     registry.register(ResolveTermTool(provider))
+    registry.register(ValidateSqlTool(provider))
 
     # Register run_sql tool
     if snowflake_config:
@@ -260,6 +263,8 @@ def create_excel_schema_agent(
             # Register run_sql tool
             run_sql_tool = RunSqlTool(sql_runner=snowflake_runner)
             registry.register(run_sql_tool)
+            # Register sample data tool
+            registry.register(SampleDataTool(sql_runner=snowflake_runner))
             print("[info] Snowflake SQL execution enabled")
         except Exception as e:
             print(f"[ERROR] Failed to initialize Snowflake: {e}")
