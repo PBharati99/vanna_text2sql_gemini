@@ -301,11 +301,18 @@ def create_excel_schema_agent(
 async def main():
     """Example usage of Excel schema agent with Snowflake integration."""
     if len(sys.argv) < 2:
-        print("Usage: python vanna/examples/gemini_excel_schema_example.py <excel-path>")
-        print("Example: python vanna/examples/gemini_excel_schema_example.py './Promo Semantic Data_20250519.xlsx'")
-        sys.exit(1)
+        # Default to enriched file if available
+        default_file = "Promo Semantic Data_20250519_Enriched.xlsx"
+        if os.path.exists(default_file):
+            print(f"[info] Using enriched Excel file: {default_file}")
+            excel_path = default_file
+        else:
+            print("Usage: python vanna/examples/gemini_excel_schema_example.py <excel-path>")
+            print("Example: python vanna/examples/gemini_excel_schema_example.py './Promo Semantic Data_20250519.xlsx'")
+            sys.exit(1)
+    else:
+        excel_path = sys.argv[1]
 
-    excel_path = sys.argv[1]
     if not os.path.exists(excel_path):
         print(f"[error] Excel file not found: {excel_path}")
         sys.exit(1)

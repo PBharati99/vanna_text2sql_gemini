@@ -127,13 +127,15 @@ class ExcelSchemaPromptBuilder:
                 if not t:
                     continue
                 desc = t.description or ""
-                lines.append(f"- {t.table_fqn}: {desc}")
+                role_str = f" [Role: {t.role}]" if t.role else ""
+                lines.append(f"- {t.table_fqn}{role_str}: {desc}")
                 # columns
                 if t.columns:
                     col_lines: List[str] = []
                     for c in t.columns[: self.max_columns_per_table]:
                         col_desc = c.description or ""
-                        col_dtype = f" ({c.data_type})" if c.data_type else ""
+                        sem_type = f" [{c.semantic_type}]" if c.semantic_type else ""
+                        col_dtype = f" ({c.data_type}{sem_type})" if c.data_type else f" ({sem_type.strip()})" if sem_type else ""
                         col_lines.append(f"    · {c.column_name}{col_dtype}: {col_desc}")
                     if len(t.columns) > self.max_columns_per_table:
                         col_lines.append(
