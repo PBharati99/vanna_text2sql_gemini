@@ -345,11 +345,9 @@ async def main():
 
     # Example queries
     queries = [
-        # "How did promotions vary across different stores?",
-        # "Which promotion types are most common for store 123?",
-        # "List the top 5 stores by number of promotions in Q1 2025",
-        "What is the average sale price during promotions for SKU 98765?",
-        # "Show promotional activity for stores in the Northeast region",
+        "What is the revenue per store?",
+        "List all promotions for a specific product",
+        "How much inventory do we have?",
     ]
 
     conversation_id = "excel-schema-test"

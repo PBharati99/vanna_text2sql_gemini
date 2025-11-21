@@ -81,8 +81,8 @@ class SearchSchemaTool(Tool[SearchSchemaArgs]):
 
     async def execute(self, context: ToolContext, args: SearchSchemaArgs) -> ToolResult:
         try:
-            tables = self.provider.search_tables(args.query, limit=10)
-            columns = self.provider.search_columns(args.query, limit=20)
+            tables = self.provider.search_tables(args.query, limit=5)
+            columns = self.provider.search_columns(args.query, limit=10)
 
             lines: List[str] = []
             lines.append(f"Search results for '{args.query}' (searched across ALL tables and columns):")
@@ -92,6 +92,8 @@ class SearchSchemaTool(Tool[SearchSchemaArgs]):
                 lines.append(f"Relevant Tables ({len(tables)} found):")
                 for t in tables:
                     desc = t.description or ""
+                    if len(desc) > 300:
+                        desc = desc[:300] + "..."
                     lines.append(f"  - {t.table_fqn}: {desc}")
                 lines.append("")
             
@@ -106,6 +108,8 @@ class SearchSchemaTool(Tool[SearchSchemaArgs]):
                     lines.append(f"  Table: {table_fqn}")
                     for c in cols:
                         desc = c.description or ""
+                        if len(desc) > 100:
+                            desc = desc[:100] + "..."
                         dtype = f" ({c.data_type})" if c.data_type else ""
                         lines.append(f"    - {c.column_name}{dtype}: {desc}")
                     lines.append("")
